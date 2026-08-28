@@ -1,394 +1,88 @@
 # Veggie Vitality
 
-A vegetarian nutrition tracker that runs entirely on your own device. Log what you
-ate in plain English, see how the day adds up against your personal targets, and
-ask a nutrition assistant questions about your own numbers.
-
-Runs as a web app and as an Android app from the same source.
+Veggie Vitality is a local-first vegetarian nutrition tracker. You can log meals, track nutrition targets, and ask an AI assistant about your own health logs.
 
 > **Status: not actively maintained.**
-> This is personal software, published because it may be useful to read or fork,
-> not because it is a product. There is no roadmap, no release schedule, and no
-> support. Issues and pull requests may sit unanswered indefinitely. Nothing here
-> has been through the Play Store's review, and it never will be — you build it
-> yourself and install it on your own device. If you depend on it, fork it: that
-> copy will keep working exactly as it does today, which is more than can be said
-> for waiting on this one.
+> This is a personal project shared publicly. It may still be useful to read or fork, but support and updates are not guaranteed.
 
 ## What it does
 
-- **Log food by describing it.** "2 cups rice and a bowl of dal" becomes weighed
-  entries. A built-in food database handles common Indian and vegetarian staples
-  offline; anything it doesn't recognise goes to the AI service you configured.
-- **Log food from a photo.** On Android this uses the system camera picker.
-- **Daily targets** for calories, protein, fibre, iron, B12, calcium and the rest,
-  derived from your age, sex, weight, height and activity level.
-- **Water and weight tracking**, with history.
-- **Medicines and reminders.** Track up to 15 medicines, each with its own
-  name, dose, note and up to 6 daily times, and tick doses off as you take
-  them. Water reminders repeat across a window you choose. On Android these
-  are real OS alarms and fire with the app closed — see
-  [Reminders](#reminders).
-- **Dr. Veggie**, a nutrition assistant that answers with your actual logged data
-  as context. It is explicitly not a medical professional and says so.
-- **Works offline** for everything except the AI-backed features.
+- Log food in plain English
+- Capture food from a photo (Android)
+- Track daily nutrition targets, water, and weight
+- Manage medicine schedules and reminders
+- Ask **Dr. Veggie** questions using your own logged data as context
+- Work offline for all non-AI features
 
-## Your data
+## AI functionality
 
-Everything lives on your device — there is no server and no account. On the web
-that means `localStorage`; on Android it is Capacitor Preferences, backed by
-SharedPreferences, because WebView storage can be evicted under storage pressure.
+Veggie Vitality uses AI for:
 
-Your medicine list is never sent over the network. It is not part of the data
-block Dr. Veggie reasons over; a medicine list names conditions you never
-typed, so `buildHealthContext` takes a fixed set of keys that excludes it, and
-a test asserts it stays excluded. The one way it leaves the device is a backup
-you export yourself, which contains it along with everything else — treat that
-file as medical records, not as a config file.
+1. Understanding free-text food logs when offline parsing is not enough
+2. Helping estimate nutrition values for described meals
+3. Powering **Dr. Veggie**, a nutrition assistant for your tracked data
 
-The only network request the app ever makes is to the AI endpoint you configured
-(Google Gemini by default), and only when you have supplied an API key. The
-shipped bundle carries a Content-Security-Policy that makes those the only hosts
-it *can* reach — see [Using a different AI service](#using-a-different-ai-service).
+Default provider is Google Gemini, but you can switch to an OpenAI-compatible endpoint in Settings.
 
-Backups are plain JSON. The API key is **excluded by default** and has to be
-opted into, because a backup is the kind of file people email to themselves.
-Importing a backup that contains a key asks you separately before adopting it,
-and names the server that key would be sent to.
+Important notes:
 
-## Getting an API key
+- AI features require your API key
+- Requests are sent only to the configured AI endpoint
+- Dr. Veggie is informational and **not medical advice**
 
-By default the AI features use Google Gemini, so you need a key from
-[Google AI Studio](https://aistudio.google.com/apikey). The free tier is enough
-for personal use. Paste it into Settings; it is stored only on your device and is
-sent only to the configured endpoint, in a request header — never in a URL.
+## Your data and privacy
 
-Without a key the app still works: profile, targets, the offline food parser,
-water, weight and history are all local.
+- No backend, no account, no analytics
+- Data is stored on your device (`localStorage` on web, Preferences on Android)
+- Medicine list is not included in Dr. Veggie context
+- Backups are JSON files you export/import manually
+- API key is stored on-device and excluded from backup by default
 
-## Using a different AI service
-
-Settings → **Where requests go** lets you point the app somewhere other than
-Google: your own proxy, a self-hosted model, OpenRouter, Groq, LM Studio, Ollama.
-You choose three things:
-
-| Field | Meaning |
-| --- | --- |
-| **API style** | `Gemini` for Google's `:generateContent` shape, `OpenAI-compatible` for the `/chat/completions` shape that nearly everything else speaks |
-| **Address** | The base URL. For OpenAI-compatible services include the version segment (`https://openrouter.ai/api/v1`) — the app appends `/chat/completions`. For Gemini give the server root; the app appends the model path. |
-| **Model** | e.g. `gemini-2.5-flash`, `gpt-4o-mini`, `llama3.1:8b`, `anthropic/claude-3.5-sonnet` |
-
-### The address has to be allowed at build time
-
-You cannot type an arbitrary host into Settings and have it work, and this is
-deliberate. The bundle's CSP pins `connect-src` to a fixed list; a `<meta>` CSP
-can only ever be *tightened* at runtime, never relaxed. If the endpoint were
-freely settable, the protection that stops an injected script from posting your
-API key and your health log to an arbitrary server would be gone.
-
-So the list of reachable hosts is decided when you build. Copy `.env.example` to
-`.env.local` and set:
-
-```
-VITE_API_ORIGINS=https://openrouter.ai,https://api.groq.com
-```
-
-then rebuild. Origins only — scheme, host, optional port, no path. Google's
-endpoint is always allowed, so you never list it. The value lands in two places
-at once: the CSP in `index.html`, and the allowlist `src/lib/apiConfig.js`
-validates against, so a disallowed address gives you a readable sentence in
-Settings instead of a silent console error.
-
-Never put an API key in `.env.local` — it would be compiled into the JavaScript
-and shipped inside the APK. Keys belong in Settings, on the device.
-
-### Local models
-
-`http://` is accepted only for loopback (`localhost`, `127.0.0.1`), where nothing
-crosses the network. This works in the browser. It does **not** work in the
-Android app, because the manifest sets `usesCleartextTraffic="false"` — and
-loopback on the phone is the phone itself, not your PC. To use a model on your
-PC from the phone, put it behind HTTPS on your LAN and add that origin to
-`VITE_API_ORIGINS`.
-
-## Built with
-
-| | |
-| --- | --- |
-| **UI** | React 19, Tailwind CSS 4, `lucide-react` icons |
-| **Build** | Vite 7, ESLint 9, Vitest 4 |
-| **Native** | Capacitor 8 (`app`, `camera`, `filesystem`, `local-notifications`, `preferences`, `share`, `splash-screen`) |
-| **Android** | minSdk 24, target/compile SDK 36, app id `com.veggievitality.app` |
-| **AI** | Google Gemini by default; any OpenAI-compatible endpoint you allow at build time |
-
-No backend, no database, no accounts, no analytics, no crash reporting. The only
-runtime dependency outside the browser is whichever AI endpoint you configure,
-and the app works without one.
-
-Requires Node 20+ to build the web app, and a JDK 21 plus the Android SDK for
-the APK.
-
-## Running it
+## Getting started
 
 ```bash
 npm install
-```
-
-```bash
 npm run dev
 ```
 
-Other scripts:
+### Common scripts
 
-| Command | What it does |
-| --- | --- |
-| `npm run build` | Production web build into `dist/` |
-| `npm test` | Run the test suite |
-| `npm run lint` | ESLint |
-| `npm run android:sync` | Build the web app and sync it into `android/` |
-| `npm run android:build` | The above, then assemble a signed release APK (needs a keystore — see below) |
+- `npm run build` — production build
+- `npm test` — run tests
+- `npm run lint` — lint code
+- `npm run android:sync` — build + sync web assets to Android
+- `npm run android:build` — build and assemble release APK
 
-## Tests
+## Android build notes
 
-```bash
-npm test
-```
+Requires:
 
-197 tests across 12 files, all of it the logic in `src/lib/` — date rollover and
-timezone keys, the offline parser's unit handling, nutrition maths, schema
-normalization against hostile input, storage migration and quota recovery, the
-API client's error taxonomy, endpoint allowlist validation, reminder id
-allocation, and the assertion that the medicine list never enters the health
-context sent to the model. The UI is not unit-tested; it was exercised by hand
-on a device.
+- Node.js 20+
+- JDK 21
+- Android SDK (platform 36)
 
-## Building the Android app
+Release APK output:
 
-Requires a JDK 21 and the Android SDK (platform 36, build-tools 36.0.0). Point
-`android/local.properties` at your SDK:
+`android/app/build/outputs/apk/release/app-release.apk`
 
-```
-sdk.dir=C\:\\Android\\Sdk
-```
+## Project structure
 
-Then:
-
-```bash
-npm run android:build
-```
-
-The APK lands in `android/app/build/outputs/apk/release/app-release.apk`. That
-build is signed, which means it needs a keystore first — see
-[Installing it on your own phone](#installing-it-on-your-own-phone). Without one
-Gradle still succeeds but emits an unsigned APK that Android will refuse to
-install, and it warns you at build time rather than letting you find out at the
-install prompt.
-
-The native project is hardened relative to the Capacitor default: backups and
-device-to-device transfer are disabled (`allowBackup="false"` plus explicit
-extraction rules), cleartext traffic is off, WebView debugging is off, and the
-app requests **only** `INTERNET` — photo capture goes through the system picker
-rather than a camera permission.
-
-## Installing it on your own phone
-
-This app is not meant to be published. Nothing here involves the Play Store, a
-developer account, or sharing anything with anyone — you build an APK on your
-machine and copy it to your phone. It stays private because you never distribute
-the file, not because of any setting.
-
-### Build a *release* APK, not the debug one
-
-The debug APK is `android:debuggable="true"`. That flag lets anyone with USB
-debugging and `adb` read the app's private storage on a connected phone — and
-that is where your API key is stored. Use a release build for the copy you
-actually keep on your phone.
-
-Release builds have to be signed, and Android has no way to install an unsigned
-APK. The signing key is generated by you, stays on your machine, and is never
-committed (`android/.gitignore` covers `*.jks` and `keystore.properties`).
-
-**1. Create the keystore (once).** Put it *outside* the working tree, so that no
-future `git add -A` can ever commit it:
-
-```bash
-keytool -genkeypair -v -storetype PKCS12 -keystore ~/.veggie-signing/veggie-release.jks -alias veggie -keyalg RSA -keysize 4096 -validity 10000
-```
-
-`keytool` prompts for a password and for a name and organisation. The name ends
-up in the certificate, and the certificate ships inside every APK you sign and
-can be read by anyone holding the file — so use whatever you are comfortable
-having attached to it. The password is the part that matters: choose it yourself
-and keep it in your password manager.
-
-Back the `.jks` file up somewhere private. If you lose it you can never update an
-already-installed copy — only uninstall and reinstall, which wipes your logged
-data unless you exported a backup first. If someone else gets it, they can build
-an "update" your phone will silently accept.
-
-**2. Point Gradle at it.** Copy `android/keystore.properties.example` to
-`android/keystore.properties` and fill in the password you just chose. That file
-is gitignored.
-
-**3. Build.**
-
-```bash
-npm run android:sync
-```
-
-```bash
-cd android && ./gradlew assembleRelease
-```
-
-The signed APK lands in `android/app/build/outputs/apk/release/app-release.apk`.
-(Without `keystore.properties` the same command still works but produces
-`app-release-unsigned.apk`, which cannot be installed — that is the tell.)
-
-### Get it onto the phone
-
-Over USB, with USB debugging on:
-
-```bash
-adb install -r android/app/build/outputs/apk/release/app-release.apk
-```
-
-Or copy the APK across however you like — cable, your own cloud folder, a cable
-transfer — open it in the phone's file manager, and allow "install unknown apps"
-for that file manager when prompted. That prompt is Android telling you the app
-did not come from the Play Store, which is exactly right here.
-
-`-r` reinstalls over an existing copy and keeps your data — but only if the new
-APK is signed with the *same* keystore. This is why step 1 is one-time.
-
-### If you ever want it on more than one of your own devices
-
-Same APK file, same keystore. There is nothing to publish and no account
-involved. Copy the file across, install, and re-enter your API key (or import a
-backup with the key included, which the app will ask you to confirm).
-
-## Reminders
-
-Medicine and water reminders are scheduled with the OS, so on Android they fire
-whether or not the app is running.
-
-- **Nothing is scheduled until you grant notification permission**, and the app
-  only asks from a button you press — never on first launch. Revoke it in system
-  settings and the app cancels every alarm it owns rather than leaving orphans.
-- **The alarms are exact.** Since Android 13, `SCHEDULE_EXACT_ALARM` is no longer
-  granted automatically, and an inexact alarm can be deferred by up to an hour in
-  Doze — which is not what "8am dose" means. The app therefore declares
-  `USE_EXACT_ALARM`, the normal (install-time, no prompt) permission intended for
-  apps whose core function is alarms and reminders.
-- **The medicine's name is in the notification you see, and nowhere else.** The
-  data attached to the alarm carries only an id, a kind and a time, because
-  notification extras live in the OS alarm store beyond the app's own storage.
-- **Reminder ids are positional and bounded** — 15 medicines x 6 times, plus a
-  block for water — so rescheduling can cancel the app's whole id range and can
-  never strand an alarm after a rename, reorder or delete.
-- **On the web there are no real alarms.** A page cannot wake itself once the tab
-  is closed, so the fallback is an in-page timer that only works while the app is
-  open. The UI says so rather than quietly promising more.
-
-Reminders are a convenience, not a medical device. Do not rely on them alone for
-a dose that matters.
-
-## How the code is laid out
-
-```
-src/lib/          Pure logic, all unit-tested
-  schema.js         The single validated data boundary — see below
-  storage.js        Versioned persistence, migration, quota recovery, backups
-  apiConfig.js      Which service to talk to; URL validation and the allowlist
-  apiClient.js      Transport, per-protocol adapters, typed errors
-  ai.js             Prompts and reply parsing, provider-agnostic
-  localParser.js    Offline "2 cups rice" -> grams parser
-  nutrition.js      Targets and totals, as pure functions
-  foodDatabase.js   Offline nutrition data
-  healthContext.js  Builds the data block Dr. Veggie reasons over
-  reminders.js      Reminder times, dose status, and the fixed alarm id space
-  notifications.js  The only place that knows how a reminder reaches the OS
-  platform.js       The few things that genuinely differ on Android
-  dates.js          Timezone-correct date keys and midnight rollover
-src/hooks/        State ownership, debounced persistence, toasts
+```text
+src/lib/          Core logic (unit-tested)
+src/hooks/        State and persistence hooks
 src/components/   UI
 ```
 
-### The data boundary
+## Limitations
 
-Every path that produces app data — the text API, the vision API, the offline
-parser, backup import, and reading from storage — goes through
-`normalizeFoodEntry` / `normalizeAppState` in `src/lib/schema.js`. Those
-functions whitelist keys, clamp every nutrient to a sane finite range, and are
-total: any input at all, including a hostile hand-edited backup, yields a
-renderable state rather than an exception on every subsequent render.
-
-Nothing else is trusted. If you add a new source of entries, route it through
-there.
-
-### Prompt handling
-
-User data is interpolated into prompts inside delimited blocks via `fenced()` in
-`src/lib/ai.js`, which strips the marker punctuation from the payload so a food
-name can't close its own block and start issuing instructions. Names are
-additionally forced to a single line at the schema layer.
-
-The model's output is never trusted either — it is parsed with a
-bracket-balancing extractor and then normalized like any other input.
-
-## Limitations worth knowing
-
-- The API key is stored in plaintext on the device. That is inherent to a
-  local-first app with no backend; on a device with a screen lock and no root it
-  is as protected as the app's private storage. Keystore-backed encryption would
-  be the upgrade.
-- An exported backup is a plaintext copy of everything, and once it leaves the
-  app it is your responsibility. The app stages it in private storage and hands
-  it to the share sheet rather than dropping it in shared Documents, so no copy
-  is left behind on the phone — but wherever you send it, it is medical data in
-  a file anyone can open.
-- Pointing the app at a third-party endpoint means that operator receives every
-  food description and health question you send. The app tells you which host is
-  configured, but it cannot vouch for it.
-- Nutrition figures from the model are estimates, and so are the offline
-  database's. Treat them as a guide.
-- Dr. Veggie is not medical advice, and refers you to a professional for anything
-  clinical.
-
-## Security
-
-The threat model is narrow and worth stating, because "local-first" is not the
-same as "safe":
-
-- **Against other apps on the phone.** App storage is private, the app declares
-  only `INTERNET` and `USE_EXACT_ALARM`, `allowBackup` is off so nothing lands in
-  a cloud backup or a device-to-device transfer, and the only exported component
-  is the launcher activity — it has no deep links and no custom URL scheme, so no
-  website or other app can hand it input.
-- **Against a hostile response from the AI endpoint.** Model output is parsed,
-  normalized and rendered as text; there is no `innerHTML`, no
-  `dangerouslySetInnerHTML`, no `eval` anywhere in `src/`. The bundle's CSP pins
-  `connect-src` to the endpoints allowed at build time and sets `object-src`,
-  `frame-src`, `base-uri` and `form-action` to `'none'`.
-- **Against exfiltration of the API key.** It travels in a request header, never
-  a URL, with `credentials: 'omit'` and `referrerPolicy: 'no-referrer'`, and the
-  origin allowlist is enforced in the client itself rather than only in the
-  Settings UI.
-- **Not against someone holding the unlocked phone.** The API key and your health
-  log are plaintext in app-private storage. A screen lock is what protects them.
-- **Not against a rooted device, and not against the operator of whichever
-  endpoint you point it at.** They receive everything you send.
-
-If you find something, open an issue — but read the maintenance notice at the top
-first, and assume you may need to fix it in your own fork.
+- AI and nutrition values are estimates
+- API key is stored locally in app storage
+- Exported backups are plain JSON and should be handled carefully
 
 ## Contributing
 
-Realistically, don't — see the status notice at the top. Forks are the right move
-here. If you do open a PR, it needs to keep `npm run lint` and `npm test` clean,
-and any new source of food entries has to go through `normalizeFoodEntry` in
-`src/lib/schema.js` rather than around it.
+This repo is effectively in maintenance mode. Forking is the recommended path.
 
 ## License
 
-No license file is included, so default copyright applies: the source is public
-to read, not licensed for redistribution. Ask if you want that changed.
+No license file is included, so default copyright applies.
