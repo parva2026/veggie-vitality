@@ -1,0 +1,104 @@
+@import "tailwindcss";
+
+/* Tailwind v4 keeps its configuration in CSS. The old v3 `tailwind.config.js`
+   plus `@tailwind` directives never compiled here — the app was really styled by
+   the `cdn.tailwindcss.com` script in index.html, so it had no styling at all
+   offline or inside a WebView with no network. */
+
+/* Emerald in sRGB rather than oklch.
+   These are the exact same colours Tailwind v4 ships — just written in a colour
+   space every WebView agrees on.
+
+   Two reasons. Android WebView only understands oklch from Chromium 111, and
+   minSdk here is 24, so on an older WebView `bg-emerald-700` is simply dropped,
+   leaving the header white — with white text on it. And the emulator's software
+   compositor mis-paints an oklch background on a *stuck* sticky layer: the
+   header rendered #E2FFFF (pale cyan) while an identical non-stuck element
+   rendered correctly, with computed style, opacity and filters all verified
+   normal. Written as hex, it paints correctly in both cases.
+
+   Emerald gets this treatment because it is the only palette carrying
+   white-on-colour text, where a failure is unreadable rather than merely ugly. */
+@theme {
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d0fae5;
+  --color-emerald-200: #a4f4cf;
+  --color-emerald-300: #5ee9b5;
+  --color-emerald-400: #00d492;
+  --color-emerald-500: #00bc7d;
+  --color-emerald-600: #009966;
+  --color-emerald-700: #007a55;
+  --color-emerald-800: #006045;
+  --color-emerald-900: #004f3b;
+  --color-emerald-950: #002c22;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: #f8fafc;
+  color: #0f172a;
+  /* Stop pull-to-refresh and rubber-band bounce from dragging the whole app on
+     Android, where the chat panes do their own scrolling. */
+  overscroll-behavior-y: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #020617;
+    color: #e2e8f0;
+  }
+}
+
+/* A font-size below 16px makes mobile WebViews zoom in on focus. */
+input,
+select,
+textarea {
+  font-size: 16px;
+}
+
+@media (min-width: 640px) {
+  input,
+  select,
+  textarea {
+    font-size: inherit;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-in;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.scrollbar-thin::-webkit-scrollbar { width: 6px; }
+.scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  background: rgb(148 163 184 / 0.4);
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

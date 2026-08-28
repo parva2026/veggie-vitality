@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Belt-and-braces: android:allowBackup is already "false", so nothing here should
+  ever run. If someone re-enables backup, these rules still keep the WebView's
+  localStorage / Capacitor Preferences (which hold the user's Gemini API key and
+  their whole health log) out of Google's cloud backup.
+-->
+<full-backup-content>
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="database" path="." />
+    <exclude domain="file" path="app_webview" />
+    <exclude domain="root" path="app_webview" />
+</full-backup-content>

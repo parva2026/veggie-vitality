@@ -1,0 +1,120 @@
+apply plugin: 'com.android.application'
+
+/**
+ * Release signing, read from `android/keystore.properties` (gitignored, never
+ * committed). If the file is absent — a fresh checkout, CI, or someone who only
+ * wants a debug build — the release build type simply falls back to unsigned
+ * rather than failing, so nothing here is required to build the app.
+ *
+ * Create the file and the keystore yourself; see README §"Installing it on your
+ * own phone". The keystore and its password stay on your machine: they are what
+ * proves a future update is from you, and there is no way to recover them.
+ */
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystorePropsFile.withInputStream { keystoreProps.load(it) }
+}
+
+/**
+ * Passwords come from the environment first and the properties file second.
+ *
+ * Held in `VEGGIE_STORE_PASSWORD` / `VEGGIE_KEY_PASSWORD` for the length of one
+ * shell session, the plaintext never touches the disk at all; what stays in
+ * `keystore.properties` is then just the keystore's path and the key alias,
+ * neither of which is a secret. Writing them into the file still works, for
+ * whoever decides that trade is worth the convenience — the file is gitignored
+ * either way.
+ *
+ * `keyPassword` falls back to the store password because `keytool` offers to
+ * reuse it and most people take the offer.
+ */
+def releaseStorePassword = System.getenv("VEGGIE_STORE_PASSWORD") ?: keystoreProps["storePassword"]
+def releaseKeyPassword = System.getenv("VEGGIE_KEY_PASSWORD") ?: keystoreProps["keyPassword"] ?: releaseStorePassword
+def releaseKeystore = keystoreProps.containsKey("storeFile") ? rootProject.file(keystoreProps["storeFile"]) : null
+
+/**
+ * Signing is configured only when it can actually succeed. A keystore that is
+ * named but missing, or named but without a password, would otherwise fail deep
+ * inside the packaging task as "Keystore was tampered with, or password was
+ * incorrect" — which reads as a corrupt keystore rather than as a setup step
+ * that was never finished.
+ */
+def canSignRelease = releaseKeystore != null && releaseKeystore.exists() && releaseStorePassword
+if (releaseKeystore != null && !canSignRelease) {
+    logger.warn("veggie-tracker: release signing is configured but unusable, so the release APK "
+        + "will be UNSIGNED and will not install. "
+        + (releaseKeystore.exists()
+            ? "No password found - set VEGGIE_STORE_PASSWORD, or add storePassword= to keystore.properties."
+            : "Keystore not found at ${releaseKeystore}."))
+}
+
+android {
+    namespace = "com.veggievitality.app"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "com.veggievitality.app"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (canSignRelease) {
+            release {
+                storeFile releaseKeystore
+                storePassword releaseStorePassword
+                keyAlias keystoreProps["keyAlias"]
+                keyPassword releaseKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // A release build is not debuggable, which is the point: on a debug
+            // APK anything with adb can read the app's private storage — and the
+            // API key lives there.
+            debuggable false
+            if (signingConfigs.findByName("release") != null) {
+                signingConfig signingConfigs.release
+            }
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

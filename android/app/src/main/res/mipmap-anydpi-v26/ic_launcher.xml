@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background"/>
+    <foreground android:drawable="@mipmap/ic_launcher_foreground"/>
+    <!--
+      Android 13+ themed icons tint the launcher icon to the user's wallpaper
+      palette, using only this layer's alpha. The foreground is already a white
+      leaf on transparency, which is exactly that shape; without the tag the
+      system falls back to shrinking the whole icon into a grey circle.
+    -->
+    <monochrome android:drawable="@mipmap/ic_launcher_foreground"/>
+</adaptive-icon>
