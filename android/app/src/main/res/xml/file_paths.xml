@@ -1,5 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  What the app's FileProvider is willing to hand out a URI for.
+
+  `<external-path path="."/>` used to be here, and its root is the whole of
+  shared storage - every photo, document and download on the phone. Nothing
+  needed that: the camera plugin writes to getExternalFilesDir(PICTURES), which
+  is app-scoped, and everything else goes through the cache. The provider is
+  not exported and grants are per-file, so this was headroom rather than a hole,
+  but headroom is what a later bug builds on.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <!-- Camera capture target: getExternalFilesDir(Environment.DIRECTORY_PICTURES). -->
+    <external-files-path name="camera_images" path="Pictures/" />
+    <!-- Crop/edit temporaries, and backups staged for the share sheet. Private. -->
+    <cache-path name="app_cache" path="." />
 </paths>

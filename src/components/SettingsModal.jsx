@@ -132,11 +132,15 @@ export function SettingsModal({
         `veggie-tracker-backup-${todayKey()}.json`,
         JSON.stringify(backup, null, 2),
       );
+      if (!result.ok) {
+        onNotify({ type: 'info', message: 'Nothing was sent, so no backup was saved.' });
+        return;
+      }
       onNotify({
         type: 'success',
         message: result.method === 'download'
           ? 'Backup downloaded.'
-          : 'Backup saved to your Documents folder.',
+          : 'Backup sent. No copy is kept on this phone, so put it somewhere you can find again.',
       });
     } catch (err) {
       console.error('Export failed:', err);

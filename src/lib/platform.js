@@ -33,11 +33,36 @@ function downloadInBrowser(filename, text) {
 }
 
 /**
- * Save a text file and offer to share it.
+ * Where a native export is staged on its way out of the app.
+ *
+ * This used to write to `Directory.Documents`, which on Android is *shared*
+ * storage — `/sdcard/Documents` — and the file stayed there indefinitely after
+ * sharing. Any app holding All-files access, which plenty of file managers and
+ * "cleaner" utilities ask for and get, could then read it at leisure. A health
+ * log, and an API key when the user opts to include one, sitting in a
+ * world-readable folder is not a defensible default for an app you hand to
+ * someone else. The export is staged in the app's private cache instead and
+ * leaves only through the share sheet, one grant at a time.
+ */
+const EXPORT_DIR = 'backups';
+
+/** Empty the staging directory. Absent is the same as empty. */
+async function clearStagedExports(Filesystem, Directory) {
+  try {
+    const { files } = await Filesystem.readdir({ path: EXPORT_DIR, directory: Directory.Cache });
+    await Promise.all(files.map((entry) => Filesystem.deleteFile({
+      path: `${EXPORT_DIR}/${typeof entry === 'string' ? entry : entry.name}`,
+      directory: Directory.Cache,
+    }).catch(() => {})));
+  } catch { /* no directory yet */ }
+}
+
+/**
+ * Save a text file and hand it off.
  *
  * A programmatic anchor click on a `blob:` URL — what the original export did —
- * simply does nothing inside an Android WebView. On native we write to the app's
- * documents directory and open the share sheet instead.
+ * simply does nothing inside an Android WebView, so on native the file is
+ * written out and passed to the share sheet instead.
  */
 export async function saveTextFile(filename, text) {
   if (!isNativePlatform()) {
@@ -50,25 +75,31 @@ export async function saveTextFile(filename, text) {
     import('@capacitor/share'),
   ]);
 
+  // One at a time. The previous export has already been handed off, and every
+  // copy left lying around is one more thing a future bug could expose.
+  await clearStagedExports(Filesystem, Directory);
+
+  const path = `${EXPORT_DIR}/${filename}`;
   await Filesystem.writeFile({
-    path: filename,
-    data: text,
-    directory: Directory.Documents,
-    encoding: Encoding.UTF8,
-    recursive: true,
+    path, data: text, directory: Directory.Cache, encoding: Encoding.UTF8, recursive: true,
   });
-  const { uri } = await Filesystem.getUri({ path: filename, directory: Directory.Documents });
+  const { uri } = await Filesystem.getUri({ path, directory: Directory.Cache });
 
   try {
-    const { value } = await Share.canShare();
-    if (value) {
-      await Share.share({ title: 'Veggie Tracker backup', url: uri, dialogTitle: 'Save or send your backup' });
-      return { ok: true, method: 'share', uri };
-    }
-  } catch {
-    // Share cancelled or unavailable — the file is still written.
+    await Share.share({
+      title: 'Veggie Tracker backup',
+      url: uri,
+      dialogTitle: 'Save or send your backup',
+    });
+    return { ok: true, method: 'share' };
+  } catch (err) {
+    // Dismissing the sheet rejects here too, and the two are not worth
+    // distinguishing: either way nothing was handed off, and the staged copy
+    // sits in private cache where the user cannot reach it. Saying "saved"
+    // would be a lie they only discover when they need the backup.
+    await clearStagedExports(Filesystem, Directory);
+    return { ok: false, method: 'unsent', error: err };
   }
-  return { ok: true, method: 'file', uri };
 }
 
 /* -------------------------------------------------------------------- images */

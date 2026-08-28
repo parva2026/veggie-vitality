@@ -11,7 +11,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "android:sync": "vite build && cap sync android",
-    "android:build": "npm run android:sync && cd android && gradlew.bat assembleDebug"
+    "android:build": "npm run android:sync && cd android && gradlew.bat assembleRelease"
   },
   "dependencies": {
     "@capacitor/app": "^8.1.1",

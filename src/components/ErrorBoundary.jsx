@@ -37,7 +37,7 @@ function rawFallbackExport() {
 export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-    this.state = { error: null, exportState: 'idle' }; // idle | busy | done | empty | failed
+    this.state = { error: null, exportState: 'idle' }; // idle | busy | done | unsent | empty | failed
   }
 
   static getDerivedStateFromError(error) {
@@ -77,8 +77,11 @@ export class ErrorBoundary extends React.Component {
     if (!text) { this.setState({ exportState: 'empty' }); return; }
 
     try {
-      await saveTextFile('veggie_tracker_rescue_backup.json', text);
-      this.setState({ exportState: 'done' });
+      // On Android the file leaves through the share sheet, and dismissing that
+      // sheet is not a failure - but it is not a saved backup either, and the
+      // whole point of this screen is that the user is about to lose data.
+      const result = await saveTextFile('veggie_tracker_rescue_backup.json', text);
+      this.setState({ exportState: result.ok ? 'done' : 'unsent' });
     } catch {
       this.setState({ exportState: 'failed' });
     }
@@ -86,7 +89,8 @@ export class ErrorBoundary extends React.Component {
 
   exportMessage() {
     switch (this.state.exportState) {
-      case 'done': return 'Backup saved. Your API key was not included.';
+      case 'done': return 'Backup exported. Your API key was not included.';
+      case 'unsent': return 'Nothing was sent. Tap again and choose where to save the file.';
       case 'empty': return 'No saved data was found on this device.';
       case 'failed': return 'The backup could not be written to this device.';
       default: return null;
